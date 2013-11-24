@@ -84,6 +84,7 @@ class reddit{
    }
 
    public function getCleanPosts($subreddit, $after) {
+      echo "\nUpdating Listing...\n";
       // Specify which subreddit and how many posts to scan.
       $listing = self::getListing($subreddit, $after);
 
@@ -152,6 +153,7 @@ class reddit{
    }
 
    public function getTopComment($url) {
+      echo "|";
       $pageInfo = self::getPage($url . '?sort=top');
 
       $regex = '/score unvoted">(\d+) points.*?\<p\>(.*?)\<\/p\>/ms';

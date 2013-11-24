@@ -12,3 +12,7 @@ v2.0: Safer and Smarter
  - Checks that the comment hasn't already been posted.
  - Will keep parsing until quota has been reached.
 
+v3.0: It Talks!
+ - A lot more verbose in its actions.
+ - New Docopt argument parsing.
+ - Manual mode to screen comments before submitting them.
