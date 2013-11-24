@@ -1,20 +1,20 @@
 <?php
 /**
-* Reddit PHP SDK
-*
-* Provides a SDK for accessing the Reddit APIs
-* Useage: 
-*   $reddit = new reddit();
-*   $reddit->login("USERNAME", "PASSWORD");
-*   $user = $reddit->getUser();
-*/
+ * Reddit PHP SDK
+ *
+ * Provides a SDK for accessing the Reddit APIs
+ * Useage: 
+ *   $reddit = new reddit();
+ *   $reddit->login("USERNAME", "PASSWORD");
+ *   $user = $reddit->getUser();
+ */
 class reddit{
-    //private $apiHost = "http://www.reddit.com/api";
-    private $apiHost = "https://ssl.reddit.com/api";
-    private $modHash = null;
-    private $session = null;
-    
-    /**
+   //private $apiHost = "http://www.reddit.com/api";
+   private $apiHost = "https://ssl.reddit.com/api";
+   private $modHash = null;
+   private $session = null;
+
+   /**
     * Class Constructor
     *
     * Construct the class and simultaneously log a user in.
@@ -22,24 +22,24 @@ class reddit{
     * @param string $username The username to be logged into
     * @param string $password The password to be used to log in
     */
-    public function __construct($username = null, $password = null){
-        $urlLogin = "{$this->apiHost}/login/$username";
-        
-        $postData = sprintf("api_type=json&user=%s&passwd=%s",
-                            $username,
-                            $password);
-        $response = $this->runCurl($urlLogin, $postData);
-        
-        if (count($response->json->errors) > 0){
-            return "login error";    
-        } else {
-            $this->modHash = $response->json->data->modhash;   
-            $this->session = $response->json->data->cookie;
-            return $this->modHash;
-        }
-    }
-    
-    /**
+   public function __construct($username = null, $password = null){
+      $urlLogin = "{$this->apiHost}/login/$username";
+
+      $postData = sprintf("api_type=json&user=%s&passwd=%s",
+         $username,
+         $password);
+      $response = $this->runCurl($urlLogin, $postData);
+
+      if (count($response->json->errors) > 0){
+         return "login error";    
+      } else {
+         $this->modHash = $response->json->data->modhash;   
+         $this->session = $response->json->data->cookie;
+         return $this->modHash;
+      }
+   }
+
+   /**
     * Create new story
     *
     * Creates a new story on a particular subreddit
@@ -48,109 +48,155 @@ class reddit{
     * @param string $link The link that the story should forward to
     * @param string $subreddit The subreddit where the story should be added
     */
-    public function createStory($title = null, $link = null, $subreddit = null){
-        $urlSubmit = "{$this->apiHost}/submit";
-        
-        //data checks and pre-setup
-        if ($title == null || $subreddit == null){ return null; }
-        $kind = ($link == null) ? "self" : "link";
-        
-        $postData = sprintf("uh=%s&kind=%s&sr=%s&title=%s&r=%s&renderstyle=html",
-                            $this->modHash,
-                            $kind,
-                            $subreddit,
-                            urlencode($title),
-                            $subreddit);
-        
-        //if link was present, add to POST data             
-        if ($link != null){ $postData .= "&url=" . urlencode($link); }
-    
-        $response = $this->runCurl($urlSubmit, $postData);
-        
-        if ($response->jquery[18][3][0] == "that link has already been submitted"){
-            return $response->jquery[18][3][0];
-        }
-    }
-    
-    /**
+   public function createStory($title = null, $link = null, $subreddit = null){
+      $urlSubmit = "{$this->apiHost}/submit";
+
+      //data checks and pre-setup
+      if ($title == null || $subreddit == null){ return null; }
+      $kind = ($link == null) ? "self" : "link";
+
+      $postData = sprintf("uh=%s&kind=%s&sr=%s&title=%s&r=%s&renderstyle=html",
+         $this->modHash,
+         $kind,
+         $subreddit,
+         urlencode($title),
+         $subreddit);
+
+      //if link was present, add to POST data             
+      if ($link != null){ $postData .= "&url=" . urlencode($link); }
+
+      $response = $this->runCurl($urlSubmit, $postData);
+
+      if ($response->jquery[18][3][0] == "that link has already been submitted"){
+         return $response->jquery[18][3][0];
+      }
+   }
+
+   /**
     * Get user
     *
     * Get data for the current user
     * @link https://github.com/reddit/reddit/wiki/API%3A-me.json
     */
-    public function getUser(){
-        $urlUser = "{$this->apiHost}/me.json";
-        return $this->runCurl($urlUser);
-    }
-    
-    /**
+   public function getUser(){
+      $urlUser = "{$this->apiHost}/me.json";
+      return $this->runCurl($urlUser);
+   }
+
+   public function getCleanPosts($subreddit, $after) {
+      // Specify which subreddit and how many posts to scan.
+      $listing = self::getListing($subreddit, $after);
+
+      // Make the objects a bit more readable
+      for($i = 0, $posts = array(); $i < count($listing->data->children); $i++) {
+         $posts[] = array(
+            'url'      => $listing->data->children[$i]->data->permalink,
+            'score'    => $listing->data->children[$i]->data->score,
+            'name'     => $listing->data->children[$i]->data->name,
+            'domain'   => $listing->data->children[$i]->data->domain,
+            'comments' => $listing->data->children[$i]->data->num_comments
+         );
+      }
+
+      return $posts;
+   }
+
+   public function searchKarmaDecay($url) {
+      $toSearch = array();
+      $data = self::getPage("http://karmadecay.com" . $url);
+
+      // Format: title | points | age | /r/ | comments
+      $regex = '/(\:--)\|\1\|\1\|\1\|\1(.*?)\*\[S/ms';
+      if (preg_match($regex, $data, $matches)) {
+         foreach(explode("\n", $matches[2]) as $duplicate) {
+            if ($duplicate[0] == '[') {
+               $dupData = explode("|", $duplicate);
+               if (count($dupData) != 5) {
+                  continue;
+               }
+
+               preg_match('/\]\((.*?)\)/ms', $dupData[0], $matches);
+               $toSearch[] = array(
+                  'url'      => $matches[1],
+                  'score'    => $dupData[1],
+                  'comments' => $dupData[4]
+               );
+            }
+         }
+      }
+
+      return $toSearch;
+   }
+
+   /**
     * Get user subscriptions
     *
     * Get the subscriptions that the user is subscribed to
     * @link https://github.com/reddit/reddit/wiki/API%3A-mine.json
     */
-    public function getSubscriptions(){
-        $urlSubscriptions = "http://www.reddit.com/reddits/mine.json";
-        return $this->runCurl($urlSubscriptions);
-    }
-    
-    /**
+   public function getSubscriptions() {
+      $urlSubscriptions = "http://www.reddit.com/reddits/mine.json";
+      return $this->runCurl($urlSubscriptions);
+   }
+
+   /**
     * Get listing
     *
     * Get the listing of submissions from a subreddit
     * @link http://www.reddit.com/dev/api#GET_listing
     * @param string $sr The subreddit name. Ex: technology, limit (integer): The number of posts to gather
     */
-    public function getListing($sr, $limit = 0){
-        $limit = $limit > 0 ? "?limit=$limit" : "";
-        if($sr == 'home' || $sr == 'reddit' || !isset($sr)){
-            $urlListing = "http://www.reddit.com/.json{$limit}";
-        } else {
-            $urlListing = "http://www.reddit.com/r/{$sr}/.json{$limit}";
-        }
-        return $this->runCurl($urlListing);
-    }
-    
-    public function getTopComment($url) {
-       $pageInfo = $this->getPage($url . '?sort=top');
+   public function getListing($sr, $after = ''){
+      $params = "?limit=1000&after=$after";
+      return $this->runCurl("http://www.reddit.com/r/$sr/.json$params");
+   }
 
-       $regex = '/score unvoted">(\d+) points.*?\<p\>(.*?)\<\/p\>/ms';
-       if (preg_match($regex, $pageInfo, $matches)) {
-          return array('score'   => $matches[1],
-                       'comment' => strip_tags(html_entity_decode($matches[2], ENT_QUOTES)));
-       }
+   public function getTopComment($url) {
+      $pageInfo = self::getPage($url . '?sort=top');
 
-       return array('score' => 0, 'comment' => '');
-    }
+      $regex = '/score unvoted">(\d+) points.*?\<p\>(.*?)\<\/p\>/ms';
+      if (preg_match($regex, $pageInfo, $matches)) {
+         return array('score'   => $matches[1],
+            'comment' => strip_tags(html_entity_decode($matches[2], ENT_QUOTES)));
+      }
 
-    /**
+      return array('score' => 0, 'comment' => '');
+   }
+
+   public function hasComment($url, $comment) {
+      $pageInfo = self::getPage("http://reddit.com$url");
+      $comment = preg_replace('!\s+!', '\s', preg_quote($comment, '/'));
+      return preg_match("/($comment)/ms", strip_tags(html_entity_decode($pageInfo, ENT_QUOTES)), $matches);
+   }
+
+   /**
     * Get page information
     *
     * Get information on a URLs submission on Reddit
     * @link https://github.com/reddit/reddit/wiki/API%3A-info.json
     * @param string $url The URL to get information for
     */
-    public function getPageInfo($url){
-        $response = null;
-        if ($url){
-            $urlInfo = "{$this->apiHost}/info.json?url=" . urlencode($url);
-            $response = $this->runCurl($urlInfo);
-        }
-        return $response;
-    }
-    
-    /**
+   public function getPageInfo($url){
+      $response = null;
+      if ($url){
+         $urlInfo = "{$this->apiHost}/info.json?url=" . urlencode($url);
+         $response = $this->runCurl($urlInfo);
+      }
+      return $response;
+   }
+
+   /**
     * Get Raw JSON
     *
     * Get Raw JSON for a reddit permalink
     * @param string $permalink permalink to get raw JSON for
     */
-    public function getRawJSON($permalink){
-        $urlListing = "http://www.reddit.com/{$permalink}.json";
-        return $this->runCurl($urlListing);
-    }  
-         
-    /**
+   public function getRawJSON($permalink){
+      $urlListing = "http://www.reddit.com/{$permalink}.json";
+      return $this->runCurl($urlListing);
+   }  
+
+   /**
     * Save post
     *
     * Save a post to your account.  Save feeds:
@@ -160,17 +206,17 @@ class reddit{
     * @param string $name the full name of the post to save (name parameter
     *                     in the getSubscriptions() return value)
     */
-    public function savePost($name){
-        $response = null;
-        if ($name){
-            $urlSave = "{$this->apiHost}/save";
-            $postData = sprintf("id=%s&uh=%s", $name, $this->modHash);
-            $response = $this->runCurl($urlSave, $postData);
-        }
-        return $response;
-    }
-    
-    /**
+   public function savePost($name){
+      $response = null;
+      if ($name){
+         $urlSave = "{$this->apiHost}/save";
+         $postData = sprintf("id=%s&uh=%s", $name, $this->modHash);
+         $response = $this->runCurl($urlSave, $postData);
+      }
+      return $response;
+   }
+
+   /**
     * Unsave post
     *
     * Unsave a saved post from your account
@@ -178,27 +224,27 @@ class reddit{
     * @param string $name the full name of the post to unsave (name parameter
     *                     in the getSubscriptions() return value)
     */
-    public function unsavePost($name){
-        $response = null;
-        if ($name){
-            $urlUnsave = "{$this->apiHost}/unsave";
-            $postData = sprintf("id=%s&uh=%s", $name, $this->modHash);
-            $response = $this->runCurl($urlUnsave, $postData);
-        }
-        return $response;
-    }
-    
-    /**
+   public function unsavePost($name){
+      $response = null;
+      if ($name){
+         $urlUnsave = "{$this->apiHost}/unsave";
+         $postData = sprintf("id=%s&uh=%s", $name, $this->modHash);
+         $response = $this->runCurl($urlUnsave, $postData);
+      }
+      return $response;
+   }
+
+   /**
     * Get saved posts
     *
     * Get the listing of a user's saved posts 
     * @param string $username the desired user. Must be already authenticated.
     */
-    public function getSaved($username){
-        return $this->runCurl("http://www.reddit.com/user/".$username."/saved.json");
-    }
-    
-    /**
+   public function getSaved($username){
+      return $this->runCurl("http://www.reddit.com/user/".$username."/saved.json");
+   }
+
+   /**
     * Hide post
     *
     * Hide a post on your account
@@ -206,17 +252,17 @@ class reddit{
     * @param string $name The full name of the post to hide (name parameter
     *                     in the getSubscriptions() return value)
     */
-    public function hidePost($name){
-        $response = null;
-        if ($name){
-            $urlHide = "{$this->apiHost}/hide";
-            $postData = sprintf("id=%s&uh=%s", $name, $this->modHash);
-            $response = $this->runCurl($urlHide, $postData);
-        }
-        return $response;
-    }
-    
-    /**
+   public function hidePost($name){
+      $response = null;
+      if ($name){
+         $urlHide = "{$this->apiHost}/hide";
+         $postData = sprintf("id=%s&uh=%s", $name, $this->modHash);
+         $response = $this->runCurl($urlHide, $postData);
+      }
+      return $response;
+   }
+
+   /**
     * Unhide post
     *
     * Unhide a hidden post on your account
@@ -224,17 +270,17 @@ class reddit{
     * @param string $name The full name of the post to unhide (name parameter
     *                     in the getSubscriptions() return value)
     */
-    public function unhidePost($name){
-        $response = null;
-        if ($name){
-            $urlUnhide = "{$this->apiHost}/unhide";
-            $postData = sprintf("id=%s&uh=%s", $name, $this->modHash);
-            $response = $this->runCurl($urlUnhide, $postData);
-        }
-        return $response;
-    }
-    
-    /**
+   public function unhidePost($name){
+      $response = null;
+      if ($name){
+         $urlUnhide = "{$this->apiHost}/unhide";
+         $postData = sprintf("id=%s&uh=%s", $name, $this->modHash);
+         $response = $this->runCurl($urlUnhide, $postData);
+      }
+      return $response;
+   }
+
+   /**
     * Share a post
     *
     * E-Mail a post to someone
@@ -246,21 +292,21 @@ class reddit{
     * @param string $shareTo The e-mail the story should be sent to
     * @param string $message The e-mail message
     */
-    public function sharePost($name, $shareFrom, $replyTo, $shareTo, $message){
-        $urlShare = "{$this->apiHost}/share";
-        $postData = sprintf("parent=%s&share_from=%s&replyto=%s&share_to=%s&message=%s&uh=%s",
-                            $name,
-                            $shareFrom,
-                            $replyTo,
-                            $shareTo,
-                            $message,
-                            $this->modHash);
-        
-        $response = $this->runCurl($urlShare, $postData);
-        return $response;
-    }
-    
-    /**
+   public function sharePost($name, $shareFrom, $replyTo, $shareTo, $message){
+      $urlShare = "{$this->apiHost}/share";
+      $postData = sprintf("parent=%s&share_from=%s&replyto=%s&share_to=%s&message=%s&uh=%s",
+         $name,
+         $shareFrom,
+         $replyTo,
+         $shareTo,
+         $message,
+         $this->modHash);
+
+      $response = $this->runCurl($urlShare, $postData);
+      return $response;
+   }
+
+   /**
     * Add new comment
     *
     * Add a new comment to a story
@@ -269,20 +315,20 @@ class reddit{
     *                     in the getSubscriptions() return value)
     * @param string $text The comment markup
     */
-    public function addComment($name, $text){
-        $response = null;
-        if ($name && $text){
-            $urlComment = "{$this->apiHost}/comment";
-            $postData = sprintf("thing_id=%s&text=%s&uh=%s",
-                                $name,
-                                $text,
-                                $this->modHash);
-            $response = $this->runCurl($urlComment, $postData);
-        }
-        return $response;
-    }
-    
-    /**
+   public function addComment($name, $text){
+      $response = null;
+      if ($name && $text){
+         $urlComment = "{$this->apiHost}/comment";
+         $postData = sprintf("thing_id=%s&text=%s&uh=%s",
+            $name,
+            $text,
+            $this->modHash);
+         $response = $this->runCurl($urlComment, $postData);
+      }
+      return $response;
+   }
+
+   /**
     * Vote on a story
     *
     * Adds a vote (up / down / neutral) on a story
@@ -292,17 +338,17 @@ class reddit{
     * @param int $vote The vote to be made (1 = upvote, 0 = no vote,
     *                  -1 = downvote)
     */
-    public function addVote($name, $vote = 1){
-        $response = null;
-        if ($name){
-            $urlVote = "{$this->apiHost}/vote";
-            $postData = sprintf("id=%s&dir=%s&uh=%s", $name, $vote, $this->modHash);
-            $response = $this->runCurl($urlVote, $postData);
-        }
-        return $response;
-    }
-    
-    /**
+   public function addVote($name, $vote = 1){
+      $response = null;
+      if ($name){
+         $urlVote = "{$this->apiHost}/vote";
+         $postData = sprintf("id=%s&dir=%s&uh=%s", $name, $vote, $this->modHash);
+         $response = $this->runCurl($urlVote, $postData);
+      }
+      return $response;
+   }
+
+   /**
     * Set flair
     *
     * Set or clear a user's flair in a subreddit
@@ -312,19 +358,19 @@ class reddit{
     * @param string $text Flair text to assign
     * @param string $cssClass CSS class to assign to the flair text
     */
-    public function setFlair($subreddit, $user, $text, $cssClass){
-        $urlFlair = "{$this->apiHost}/flair";
-        $postData = sprintf("r=%s&name=%s&text=%s&css_class=%s&uh=%s",
-                            $subreddit,
-                            $user,
-                            $text,
-                            $cssClass,
-                            $this->modHash);
-        $response = $this->runCurl($urlFlair, $postData);
-        return $response;
-    }
-    
-    /**
+   public function setFlair($subreddit, $user, $text, $cssClass){
+      $urlFlair = "{$this->apiHost}/flair";
+      $postData = sprintf("r=%s&name=%s&text=%s&css_class=%s&uh=%s",
+         $subreddit,
+         $user,
+         $text,
+         $cssClass,
+         $this->modHash);
+      $response = $this->runCurl($urlFlair, $postData);
+      return $response;
+   }
+
+   /**
     * Get flair list
     *
     * Download the flair assignments of a subreddit
@@ -334,19 +380,19 @@ class reddit{
     * @param string $after Return entries starting after this user
     * @param string $before Return entries starting before this user
     */
-    public function getFlairList($subreddit, $limit = 100, $after, $before){
-        $urlFlairList = "{$this->apiHost}/share";
-        $postData = sprintf("r=%s&limit=%s&after=%s&before=%s&uh=%s",
-                            $subreddit,
-                            $limit,
-                            $after,
-                            $before,
-                            $this->modHash);
-        $response = $this->runCurl($urlFlairList, $postData);
-        return $response;
-    }
-    
-    /**
+   public function getFlairList($subreddit, $limit = 100, $after, $before){
+      $urlFlairList = "{$this->apiHost}/share";
+      $postData = sprintf("r=%s&limit=%s&after=%s&before=%s&uh=%s",
+         $subreddit,
+         $limit,
+         $after,
+         $before,
+         $this->modHash);
+      $response = $this->runCurl($urlFlairList, $postData);
+      return $response;
+   }
+
+   /**
     * Set flair CSV file
     *
     * Post a CSV file of flair settings to a subreddit
@@ -354,17 +400,17 @@ class reddit{
     * @param string $subreddit The subreddit to use
     * @param string $flairCSV CSV file contents, up to 100 lines
     */
-    public function setFlairCSV($subreddit, $flairCSV){
-        $urlFlairCSV = "{$this->apiHost}/flaircsv.json";
-        $postData = sprintf("r=%s&flair_csv=%s&uh=%s",
-                            $subreddit,
-                            $flairCSV,
-                            $this->modHash);
-        $response = $this->runCurl($urlFlairCSV, $postData);
-        return $response;
-    }
-    
-    /**
+   public function setFlairCSV($subreddit, $flairCSV){
+      $urlFlairCSV = "{$this->apiHost}/flaircsv.json";
+      $postData = sprintf("r=%s&flair_csv=%s&uh=%s",
+         $subreddit,
+         $flairCSV,
+         $this->modHash);
+      $response = $this->runCurl($urlFlairCSV, $postData);
+      return $response;
+   }
+
+   /**
     * cURL request
     *
     * General cURL request function for GET and POST
@@ -372,37 +418,37 @@ class reddit{
     * @param string $url URL to be requested
     * @param string $postVals NVP string to be send with POST request
     */
-    private function runCurl($url, $postVals = null){
-        $ch = curl_init($url);
-        
-        $options = array(
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_COOKIE => "reddit_session={$this->session}",
-            CURLOPT_TIMEOUT => 3
-        );
-        
-        if ($postVals != null){
-            $options[CURLOPT_POSTFIELDS] = $postVals;
-            $options[CURLOPT_CUSTOMREQUEST] = "POST";  
-        }
-        
-        curl_setopt_array($ch, $options);
-        
-        $response = json_decode(curl_exec($ch));
-        curl_close($ch);
-        
-        return $response;
-    }
+   private function runCurl($url, $postVals = null){
+      $ch = curl_init($url);
 
-    public function getPage($url) {
-       $ch = curl_init();
-       curl_setopt($ch, CURLOPT_URL, $url);
-       curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-       curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-       curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-       $data = curl_exec($ch);
-       curl_close($ch);
-       return $data;
-    }
+      $options = array(
+         CURLOPT_RETURNTRANSFER => true,
+         CURLOPT_COOKIE => "reddit_session={$this->session}",
+         CURLOPT_TIMEOUT => 3
+      );
+
+      if ($postVals != null){
+         $options[CURLOPT_POSTFIELDS] = $postVals;
+         $options[CURLOPT_CUSTOMREQUEST] = "POST";  
+      }
+
+      curl_setopt_array($ch, $options);
+
+      $response = json_decode(curl_exec($ch));
+      curl_close($ch);
+
+      return $response;
+   }
+
+   public function getPage($url) {
+      $ch = curl_init();
+      curl_setopt($ch, CURLOPT_URL, $url);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+      curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+      curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+      $data = curl_exec($ch);
+      curl_close($ch);
+      return $data;
+   }
 }
 ?>

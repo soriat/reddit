@@ -9,80 +9,58 @@
 
 require("reddit.php");
 
-$username = "RepostKarmaFarmer";
-$password = "This is my password!";
-$reddit = new reddit($username, $password);
-
-// Specify which subreddit and how many posts to scan.
-$listing = $reddit->getListing('pics', 1000);
-
-// Make the objects a bit more readable
-for($i = 0; $i < count($listing->data->children); $i++) {
-   $posts[] = array(
-    'url'      => $listing->data->children[$i]->data->permalink,
-    'score'    => $listing->data->children[$i]->data->score,
-    'name'     => $listing->data->children[$i]->data->name,
-    'domain'   => $listing->data->children[$i]->data->domain,
-    'comments' => $listing->data->children[$i]->data->num_comments
-  );
+if ($argc != 5) {
+   echo "Usage: bot.php username password subreddit postcount\n";
+   exit;
 }
 
-// Time to see if these are reposts
-foreach($posts as $post) {
-   // Only do posts that don't have that many comments
-   if ($post['comments'] > 50) {
-      continue;
-   }
+$username = $argv[1];
+$password = $argv[2];
+$subreddit = $argv[3];
+$postsRemaining = $argv[4];
 
-   // Only do posts which contain an imgur link (for now)
-   if (!strstr($post['domain'], 'imgur')) {
-      continue;
-   }
+$after = '';
+$reddit = new reddit($username, $password);
 
-   // Ask KarmaDecay whether or not this is a repost
-   $data = $reddit->getPage("http://karmadecay.com" . $post['url']);
+while($postsRemaining > 0) {
+   $posts = $reddit->getCleanPosts($subreddit, $after);
 
-   // Clear / Initialize our results;
-   $toSearch = array();
+   // Time to see if these are reposts
+   foreach($posts as $post) {
+      if ($postsRemaining <= 0) {
+         return;
+      }
 
-   // Format: title | points | age | /r/ | comments
-   $regex = '/(\:--)\|\1\|\1\|\1\|\1(.*?)\*\[S/ms';
-   if (preg_match($regex, $data, $matches)) {
-      foreach(explode("\n", $matches[2]) as $duplicate) {
-         if ($duplicate[0] == '[') {
-            $dupData = explode("|", $duplicate);
-            if (count($dupData) != 5) {
-               continue;
-            }
+      // Only do posts that don't have that many comments
+      if ($post['comments'] > 50 || !strstr($post['domain'], 'imgur')) {
+         continue;
+      }
 
-            preg_match('/\]\((.*?)\)/ms', $dupData[0], $matches);
-            $toSearch[] = array(
-               'url'      => $matches[1],
-               'score'    => $dupData[1],
-               'comments' => $dupData[4]
-            );
+      $after = $post['name'];
+      $potentialPost = array('score' => 0, 'comment' => '');
+      foreach($reddit->searchKarmaDecay($post['url']) as $toCheck) {
+         $result = $reddit->getTopComment($toCheck['url']);
+         if ($result['score'] > $potentialPost['score']) {
+            $potentialPost = $result;
+            $originalURL = $toCheck['url'];
          }
       }
-   }
 
-   $potentialPost = array('score' => 0, 'comment' => '');
-   $originalURL = '';
-   foreach($toSearch as $toCheck) {
-      $result = $reddit->getTopComment($toCheck['url']);
-      if ($result['score'] > $potentialPost['score']) {
-         $potentialPost = $result;
-         $originalURL = $toCheck['url'];
+      if ($potentialPost['score'] <= 250 ||
+       $reddit->hasComment($post['url'], $potentialPost['comment'])) {
+         continue;
       }
-   }
 
-   if ($potentialPost['score'] >= 250) {
       echo "\nTo:   http://reddit.com{$post['url']}\n";
       echo "From: {$originalURL}\n";
       echo "Had Score: {$potentialPost['score']}\n";
       echo "Text: {$potentialPost['comment']}\n";
 
       $reddit->addComment($post['name'], $potentialPost['comment']);
+      $postsRemaining--;
+
       sleep(60 * 8);
    }
 }
+
 ?>
