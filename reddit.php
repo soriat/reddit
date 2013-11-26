@@ -148,7 +148,7 @@ class reddit{
     * @param string $sr The subreddit name. Ex: technology, limit (integer): The number of posts to gather
     */
    public function getListing($sr, $after = ''){
-      $params = "?limit=1000&after=$after";
+      $params = "?limit=100" . ($params ? "&after=$after" : '');
       return $this->runCurl("http://www.reddit.com/r/$sr/.json$params");
    }
 

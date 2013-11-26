@@ -16,3 +16,11 @@ v3.0: It Talks!
  - A lot more verbose in its actions.
  - New Docopt argument parsing.
  - Manual mode to screen comments before submitting them.
+
+v4.0: SQL
+ - Essentially completely automated now
+ - Functionality split up into three parts
+  - execute.php : Posts stored comments
+  - parser.php  : Writes to SQL potential comments
+  - judge.php   : Accept / Deny potential comments
+
