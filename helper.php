@@ -1,23 +1,22 @@
 <?php
 
-define('MIN_SCORE', 175);
-define('WAIT_MIN', 5);
-define('SEC', 60);
+define('MIN_SCORE', 50);
+define('WAIT_MIN', 3);
 
 function wait($diff = 0) {
-   $seconds = WAIT_MIN * SEC - $diff;
+   $seconds = WAIT_MIN * 60 - $diff;
    if ($seconds < 0) {
       return;
    }
 
-   $minutes = floor($seconds / SEC);
-   $seconds -= $minutes * SEC;
+   $minutes = floor($seconds / 60);
+   $seconds -= $minutes * 60;
 
    echo "Sleeping for {$minutes}min, {$seconds}sec";
 
    // Minutes
    for ($minute = 0, $second = 0; $minute < $minutes; $second = 0) {
-      while($second < SEC) {
+      while($second < 60) {
         sleep(5);
         echo ".";
         $second += 5;
@@ -37,12 +36,34 @@ function wait($diff = 0) {
 }
 
 function estTime($posts) {
-   $hours = floor($posts * MIN_WAIT / SEC);
-   $minutes = $posts * 8 - $hours * SEC;
+   $hours = floor($posts * MIN_WAIT / 60);
+   $minutes = $posts * MIN_WAIT - $hours * 60;
    $est = $hours ? "$hours Hours and " : '';
    $est .= "$minutes Minutes";
 
    echo "It will take ~$est to post all $posts comments\n\n";
+}
+
+function parseComment($comment, $url) {
+   $comment = trim(html_entity_decode($comment, ENT_QUOTES));
+   $from = array(
+      '/(<p>|<\/(sup|p)>)/', // -------------- Useless
+      '/<sup>/', // -------------------------- Supersrcipt
+      '/<em>(.*)<\/em>/', // ----------------- Italic
+      '/<strong>(.*)<\/strong>/', // --------- Bold
+      '/<del>(.*)<\/del>/', // --------------- Strikethrough
+      '/<blockquote>(.*)<\/blockquote>/', // - Quote
+      '/<a\shref="([^"]+)".*>(.+)<\/a>/' // -- Link
+   );
+   $to = array('', '^', '*\1*', '**\1**', '~~\1~~', '> \1', '[\2](\1)');
+   $comment = trim(strip_tags(preg_replace($from, $to, $comment)));
+
+   $lastChar = substr($comment, -1);
+   if (in_array($lastChar, array('.', '?', '!', '"', "'"))) {
+      echo substr($comment, 0, -1) . "[$lastChar]($url)\n";
+      return substr($comment, 0, -1) . "[$lastChar]($url)";
+   }
+
 }
 
 function insertParsed($db, $name) {
@@ -55,6 +76,8 @@ SQL;
 }
 
 function insertPost($db, $data, $table) {
+   $data['Comment'] = parseComment($data['Comment'], $data['OriginalURL']);
+
    $q_insert = <<<SQL
       INSERT INTO `$table`
       SET `Comment` = ?,
@@ -113,9 +136,10 @@ function updatePotentialPost($db, $name) {
 
 function getAllSubreddits() {
    $subreddits = array('pics', 'funny', 'gaming', 'wtf', 'aww', 'gifs',
-    'mildlyinteresting', 'woahdude', 'Unexpected', 'reactiongifs', 'HistoryPorn',
-    'trees', '4chan', 'atheism', 'facepalm', 'fffffffuuuuuuuuuuuu', 'cringe');
-   
+    'mildlyinteresting', 'woahdude', 'Unexpected', 'reactiongifs',
+    'HistoryPorn', 'trees', '4chan', 'atheism', 'facepalm',
+    'fffffffuuuuuuuuuuuu', 'firstworldanarchists', 'cringe');
+
    foreach($subreddits as $sub) {
       $results[$sub] = array('subreddit' => $sub, 'after' => '');
    }

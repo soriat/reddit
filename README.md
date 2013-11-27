@@ -4,7 +4,7 @@ Reddit Karma Farmer
 Concept: Find reposts and post the top comment from past versions as your own.
 
 v1.0: Strict minimum functionality
- - Can only handle ~250 posts per run.
+ - Can only handle 100 posts per run.
  - Can't skip ahead of posts that have already been parsed.
 
 v2.0: Safer and Smarter
@@ -24,3 +24,7 @@ v4.0: SQL
   - parser.php  : Writes to SQL potential comments
   - judge.php   : Accept / Deny potential comments
 
+v5.0: Accuracy
+ - Comments parsed a lot more thoroughly
+ - Includes link to repost in comment (RIP Mobile Users)
+ - Automated parsing of most popular subreddits

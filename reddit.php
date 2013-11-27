@@ -84,7 +84,6 @@ class reddit{
    }
 
    public function getCleanPosts($subreddit, $after) {
-      echo "\nUpdating Listing...\n";
       // Specify which subreddit and how many posts to scan.
       $listing = self::getListing($subreddit, $after);
 
@@ -148,7 +147,7 @@ class reddit{
     * @param string $sr The subreddit name. Ex: technology, limit (integer): The number of posts to gather
     */
    public function getListing($sr, $after = ''){
-      $params = "?limit=100" . ($params ? "&after=$after" : '');
+      $params = "?limit=100" . ($after ? "&after=$after" : '');
       return $this->runCurl("http://www.reddit.com/r/$sr/.json$params");
    }
 
@@ -156,10 +155,10 @@ class reddit{
       echo "|";
       $pageInfo = self::getPage($url . '?sort=top');
 
-      $regex = '/score unvoted">(\d+) points.*?\<p\>(.*?)\<\/p\>/ms';
+      $regex = '/score unvoted">(\d+) points.*?\<div class="md">(.*?)<\/div>/ms';
       if (preg_match($regex, $pageInfo, $matches)) {
-         return array('score'   => $matches[1],
-            'comment' => strip_tags(html_entity_decode($matches[2], ENT_QUOTES)));
+         return array('score' => $matches[1],
+            'comment' => html_entity_decode($matches[2], ENT_QUOTES));
       }
 
       return array('score' => 0, 'comment' => '');

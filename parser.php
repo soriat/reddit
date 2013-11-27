@@ -44,9 +44,17 @@ $reddit = new reddit($username, $password);
 $db = new Mysqlidb('localhost', 'soriat', '', 'reddit');
 
 while($postCount > 0) {
+   if (empty($subreddits)) {
+      die;
+   }
    $sub = array_rand($subreddits);
    $posts = $reddit->getCleanPosts($sub, $subreddits[$sub]['after']);
-   echo "Parsing $sub... Remaining: $postCount\n";
+   echo "\nParsing $sub... Remaining: $postCount\n";
+
+   if (count($posts) != 100) {
+      unset($subreddits[$sub]);
+      continue;
+   }
 
    // Time to see if these are reposts
    foreach($posts as $post) {
@@ -54,18 +62,20 @@ while($postCount > 0) {
       if ($postCount <= 0) {
          break;
       }
-      echo ".";
 
       if (hasBeenParsed($db, $post['name'])) {
+         echo ".";
          continue;
+      } else {
+         insertParsed($db, $post['name']);
       }
-      insertParsed($db, $post['name']);
 
       // Only do posts that don't have that many comments
       if ($post['score'] < 50 ||
           $post['comments'] > 50 ||
           $post['comments'] < 5 ||
           !strstr($post['domain'], 'imgur')) {
+         echo ",";
          continue;
       }
 
@@ -80,6 +90,7 @@ while($postCount > 0) {
 
       //$reddit->hasComment($post['url'], $potentialPost['comment']);
       if ($potentialPost['score'] <= MIN_SCORE) {
+         echo "'";
          continue;
       }
 
